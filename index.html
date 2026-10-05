@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Placar de Tênis</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#14324f;--card:#1d4e89;--card2:#2a6bb0;--line:#f4f7fb;--ball:#d6e82a;--ink:#f4f7fb;--mut:#a9c2dd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#dfe9f3}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Barlow,system-ui,sans-serif;min-height:100vh}
+main{max-width:560px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;color:var(--mut);font-size:14px}
+.bar select,.bar button{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--card2);border-radius:8px;padding:8px 12px}
+.bar button:focus-visible,.bar select:focus-visible,.p:focus-visible{outline:3px solid var(--ball);outline-offset:2px}
+.p{position:relative;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:14px 16px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.p:active{background:var(--card2)}
+.p.win{background:#2c7a4b}
+.top{display:flex;align-items:center;gap:10px}
+.ball{width:26px;height:26px;border-radius:50%;border:2px solid var(--ball);background:transparent;flex:none}
+.p.srv .ball{background:var(--ball)}
+.p input{flex:1;min-width:0;background:transparent;border:0;border-bottom:1px dashed var(--mut);color:var(--ink);font:700 24px 'Barlow Condensed',sans-serif;padding:2px 0}
+.sets{display:flex;gap:6px;margin-top:8px;min-height:30px}
+.sets span{font:700 22px 'Barlow Condensed',sans-serif;background:rgba(0,0,0,.25);border-radius:6px;padding:0 9px;color:var(--mut)}
+.sets span.w{color:var(--ink)}
+.big{display:flex;align-items:flex-end;justify-content:space-between;margin-top:6px}
+.pt{font:700 104px/0.95 'Barlow Condensed',sans-serif}
+.gm{text-align:right;color:var(--mut);font-size:14px}
+.gm b{display:block;font:700 54px/1 'Barlow Condensed',sans-serif;color:var(--ink)}
+.msg{text-align:center;font:700 22px 'Barlow Condensed',sans-serif;min-height:28px;color:var(--ball)}
+.hint{text-align:center;color:var(--mut);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <div class="bar">
+    <select id="bo" aria-label="Formato"><option value="2">Melhor de 3 sets</option><option value="3">Melhor de 5 sets</option><option value="1">1 set</option></select>
+    <select id="tb" aria-label="Tie-break"><option value="7">Tie-break de 7</option><option value="10">Tie-break de 10</option></select>
+    <button id="undo">Desfazer</button>
+    <button id="new">Nova partida</button>
+  </div>
+  <div class="p" id="p0" tabindex="0" role="button" aria-label="Ponto jogador 1">
+    <div class="top"><span class="ball" id="b0"></span><input id="n0" value="Jogador 1" aria-label="Nome do jogador 1"></div>
+    <div class="sets" id="s0"></div>
+    <div class="big"><div class="pt" id="pt0">0</div><div class="gm">games<b id="g0">0</b></div></div>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div class="p" id="p1" tabindex="0" role="button" aria-label="Ponto jogador 2">
+    <div class="top"><span class="ball" id="b1"></span><input id="n1" value="Jogador 2" aria-label="Nome do jogador 2"></div>
+    <div class="sets" id="s1"></div>
+    <div class="big"><div class="pt" id="pt1">0</div><div class="gm">games<b id="g1">0</b></div></div>
+  </div>
+  <div class="hint">Toque no cartão de quem ganhou o ponto. Toque na bolinha para trocar quem saca primeiro.</div>
+</main>
+<script>
+const NAMES=["0","15","30","40"];
+let S, hist=[];
+function fresh(){return {sets:[],g:[0,0],p:[0,0],tb:false,s0:0,winner:null}}
+S=fresh();
+const $=id=>document.getElementById(id);
+function playedGames(){return S.sets.reduce((a,s)=>a+s[0]+s[1],0)+S.g[0]+S.g[1]}
+function server(){
+  if(S.tb){const base=S.s0^(playedGames()%2);return base^(Math.floor((S.p[0]+S.p[1]+1)/2)%2)}
+  return S.s0^(playedGames()%2);
+}
+function setsWon(i){return S.sets.filter(s=>s[i]>s[1-i]).length}
+function point(i){
+  if(S.winner!==null)return;
+  hist.push(JSON.stringify(S));
+  const o=1-i;S.p[i]++;
+  if(S.tb){
+    if(S.p[i]>=+$("tb").value&&S.p[i]-S.p[o]>=2){S.g[i]++;endSet()}
+  }else{
+    if(S.p[i]>=4&&S.p[i]-S.p[o]>=2){S.p=[0,0];S.g[i]++;checkSet(i)}
+  }
+  render();
+}
+function checkSet(i){
+  const o=1-i;
+  if(S.g[i]>=6&&S.g[i]-S.g[o]>=2){endSet()}
+  else if(S.g[i]===7){endSet()}
+  else if(S.g[0]===6&&S.g[1]===6){S.tb=true;S.p=[0,0]}
+}
+function endSet(){
+  S.sets.push([S.g[0],S.g[1]]);S.g=[0,0];S.p=[0,0];S.tb=false;
+  const need=+$("bo").value;
+  for(const i of [0,1]) if(setsWon(i)>=need) S.winner=i;
+}
+function pts(i){
+  const a=S.p[i],b=S.p[1-i];
+  if(S.tb||(a<3&&b<3)||(a<=3&&b<=3&&!(a===3&&b===3)&&a<4&&b<4))return S.tb?String(a):NAMES[Math.min(a,3)];
+  if(a===b)return "40";
+  return a>b?"AD":"40";
+}
+function render(){
+  for(const i of [0,1]){
+    $("pt"+i).textContent=pts(i);
+    $("g"+i).textContent=S.g[i];
+    $("s"+i).innerHTML=S.sets.map(s=>`<span class="${s[i]>s[1-i]?'w':''}">${s[i]}</span>`).join("");
+    $("p"+i).classList.toggle("win",S.winner===i);
+    $("p"+i).classList.toggle("srv",S.winner===null&&server()===i);
+  }
+  const n=i=>$("n"+i).value||("Jogador "+(i+1));
+  $("msg").textContent=S.winner!==null?`🏆 ${n(S.winner)} venceu a partida!`:(S.tb?"Tie-break":"");
+}
+[0,1].forEach(i=>{
+  $("p"+i).addEventListener("click",e=>{if(e.target.tagName==="INPUT"||e.target.classList.contains("ball"))return;point(i)});
+  $("p"+i).addEventListener("keydown",e=>{if(e.target.tagName!=="INPUT"&&(e.key==="Enter"||e.key===" ")){e.preventDefault();point(i)}});
+  $("b"+i).addEventListener("click",()=>{if(playedGames()===0&&S.p[0]+S.p[1]===0&&!S.sets.length){S.s0=i;render()}});
+  $("n"+i).addEventListener("input",render);
+});
+$("undo").onclick=()=>{if(hist.length){S=JSON.parse(hist.pop());render()}};
+$("new").onclick=()=>{if(confirm("Começar uma nova partida?")){S=fresh();hist=[];render()}};
+render();
+</script>
+</body>
+</html>
